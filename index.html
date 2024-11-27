@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Manager and Terminal</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            margin-bottom: 30px;
+        }
+        #logs {
+            white-space: pre-wrap;
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        button {
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>File Manager</h1>
+        <form id="upload-form" enctype="multipart/form-data">
+            <input type="file" name="file" id="file-input">
+            <button type="submit">Upload</button>
+        </form>
+        <div id="file-list"></div>
+    </div>
+
+    <div class="container">
+        <h1>Terminal</h1>
+        <form id="command-form">
+            <input type="text" id="command-input" placeholder="Enter command">
+            <button type="submit">Run</button>
+        </form>
+        <div id="logs"></div>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('upload-form');
+        const fileList = document.getElementById('file-list');
+        const logs = document.getElementById('logs');
+
+        // Fetch uploaded files
+        const fetchFiles = async () => {
+            const response = await fetch('/uploads');
+            const files = await response.json();
+            fileList.innerHTML = files
+                .map((file) => `
+                    <div>
+                        ${file}
+                        <button onclick="deleteFile('${file}')">Delete</button>
+                        <button onclick="unzipFile('${file}')">Unzip</button>
+                    </div>
+                `)
+                .join('');
+        };
+
+        // Upload file
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(uploadForm);
+            await fetch('/upload', { method: 'POST', body: formData });
+            fetchFiles();
+        });
+
+        // Delete file
+        const deleteFile = async (filename) => {
+            await fetch(`/delete/${filename}`, { method: 'DELETE' });
+            fetchFiles();
+        };
+
+        // Unzip file
+        const unzipFile = async (filename) => {
+            await fetch(`/unzip/${filename}`, { method: 'POST' });
+            fetchFiles();
+        };
+
+        // Terminal command execution
+        const commandForm = document.getElementById('command-form');
+        commandForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const command = document.getElementById('command-input').value;
+            const response = await fetch('http://localhost:4000/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command }),
+            });
+            const result = await response.json();
+            logs.textContent += result.stdout || result.stderr || result.error;
+        });
+
+        // Initial load
+        fetchFiles();
+    </script>
+</body>
+</html>
