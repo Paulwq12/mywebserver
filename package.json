@@ -1,0 +1,21 @@
+{
+  "name": "command-runner-file-uploader",
+  "version": "1.0.0",
+  "description": "A Node.js server for running commands, uploading files, and extracting archives.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "express": "latest",
+    "express-fileupload": "latest",
+    "unzipper": "latest",
+    "rimraf": "latest"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
