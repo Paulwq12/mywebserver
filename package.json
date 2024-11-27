@@ -13,7 +13,8 @@
     "express": "latest",
     "express-fileupload": "latest",
     "unzipper": "latest",
-    "rimraf": "latest"
+    "rimraf": "latest",
+    "multer": "latest"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
