@@ -1,84 +1,85 @@
 const express = require('express');
-const fileUpload = require('express-fileupload');
+const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { exec } = require('child_process');
 const unzipper = require('unzipper');
-const fs = require('fs');
-const util = require('util');
-const rimraf = require('rimraf'); // For cleaning folders
 
 const app = express();
+const terminalApp = express();
+
+const PORT = process.env.PORT || 3000;
+const TERMINAL_PORT = 4000;
+
+// Uploads folder
 const uploadsFolder = path.join(__dirname, 'uploads');
 
 // Ensure uploads folder exists
 if (!fs.existsSync(uploadsFolder)) {
-  fs.mkdirSync(uploadsFolder);
+    fs.mkdirSync(uploadsFolder);
 }
 
 // Middleware
-app.use(fileUpload());
-app.use(express.static('public')); // Serve static files
 app.use(express.json());
+app.use(express.static(uploadsFolder));
+app.use(express.urlencoded({ extended: true }));
 
-// Endpoint to upload files
-app.post('/upload', async (req, res) => {
-  if (!req.files || Object.keys(req.files).length === 0) {
-    return res.status(400).send('No files were uploaded.');
-  }
+// Multer configuration for file uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadsFolder),
+    filename: (req, file, cb) => cb(null, file.originalname),
+});
+const upload = multer({ storage });
 
-  const uploadedFile = req.files.file;
-  const uploadPath = path.join(uploadsFolder, uploadedFile.name);
+// API Routes
+// Upload file
+app.post('/upload', upload.single('file'), (req, res) => {
+    res.send({ message: 'File uploaded successfully!', file: req.file });
+});
 
-  try {
-    // Move the uploaded file
-    await util.promisify(uploadedFile.mv)(uploadPath);
+// View uploads
+app.get('/uploads', (req, res) => {
+    fs.readdir(uploadsFolder, (err, files) => {
+        if (err) return res.status(500).send('Error reading uploads folder');
+        res.send(files);
+    });
+});
 
-    // Check if the file is a ZIP or RAR and extract it
-    if (uploadedFile.mimetype === 'application/zip') {
-      await fs
-        .createReadStream(uploadPath)
+// Delete file
+app.delete('/delete/:filename', (req, res) => {
+    const filePath = path.join(uploadsFolder, req.params.filename);
+    if (!fs.existsSync(filePath)) return res.status(404).send('File not found');
+    fs.unlink(filePath, (err) => {
+        if (err) return res.status(500).send('Error deleting file');
+        res.send('File deleted successfully');
+    });
+});
+
+// Unzip file
+app.post('/unzip/:filename', (req, res) => {
+    const filePath = path.join(uploadsFolder, req.params.filename);
+    if (!fs.existsSync(filePath)) return res.status(404).send('File not found');
+    if (!filePath.endsWith('.zip')) return res.status(400).send('Not a ZIP file');
+
+    fs.createReadStream(filePath)
         .pipe(unzipper.Extract({ path: uploadsFolder }))
-        .promise();
-      fs.unlinkSync(uploadPath); // Remove the ZIP file after extraction
-    }
-
-    res.send('File uploaded successfully!');
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Error occurred during upload.');
-  }
+        .on('close', () => res.send('File unzipped successfully'))
+        .on('error', (err) => res.status(500).send(`Error unzipping file: ${err.message}`));
 });
 
-// Endpoint to execute commands
-app.post('/command', (req, res) => {
-  const command = req.body.command;
-  if (!command) {
-    return res.status(400).send('Command is required.');
-  }
-
-  // Execute the command inside the uploads folder
-  exec(command, { cwd: uploadsFolder }, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`Error: ${error.message}`);
-      return res.status(500).send(`Error: ${error.message}`);
-    }
-    if (stderr) {
-      console.error(`Stderr: ${stderr}`);
-      return res.status(500).send(`Stderr: ${stderr}`);
-    }
-    res.send(stdout);
-  });
+// Terminal server for running commands
+terminalApp.use(express.json());
+terminalApp.post('/command', (req, res) => {
+    const command = req.body.command;
+    exec(command, { cwd: uploadsFolder }, (error, stdout, stderr) => {
+        if (error) return res.status(500).json({ error: error.message });
+        if (stderr) return res.status(500).json({ stderr });
+        res.json({ stdout });
+    });
 });
 
-// Cleanup endpoint (optional for testing)
-app.post('/cleanup', (req, res) => {
-  rimraf.sync(uploadsFolder);
-  fs.mkdirSync(uploadsFolder);
-  res.send('Uploads folder cleaned.');
-});
-
-// Start server
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+// Start servers
+app.listen(PORT, () => console.log(`Main server running on http://localhost:${PORT}`));
+terminalApp.listen(TERMINAL_PORT, () =>
+    console.log(`Terminal server running on http://localhost:${TERMINAL_PORT}`)
+);
