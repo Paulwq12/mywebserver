@@ -31,7 +31,10 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// API Routes
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 // Upload file
 app.post('/upload', upload.single('file'), (req, res) => {
     res.send({ message: 'File uploaded successfully!', file: req.file });
